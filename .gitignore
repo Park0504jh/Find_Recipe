@@ -1,0 +1,6 @@
+recipe1M_layers
+recipe1M_layers.tar
+test_lmdb/
+*.pt
+*.pkl
+__pycache__/
