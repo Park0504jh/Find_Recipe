@@ -1,3 +1,4 @@
+from image_loader import load_image_dict
 import streamlit as st
 from PIL import Image
 import json
@@ -289,6 +290,8 @@ with tab1:
 
             if results:
 
+                image_dict = load_image_dict()
+
                 st.success(
                     f"{len(results)}개의 "
                     "레시피 발견!"
@@ -331,7 +334,9 @@ with tab1:
                         """,
                         unsafe_allow_html=True
                     )
-
+                    recipe_id = recipe.get("id")
+                    if recipe_id and recipe_id in image_dict:
+                        st.image(image_dict[recipe_id], use_container_width=True)
                     with st.expander(
                         "상세 레시피 보기"
                     ):
