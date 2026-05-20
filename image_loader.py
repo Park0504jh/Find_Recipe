@@ -12,4 +12,5 @@ def load_image_dict():
         if images:
             image_dict[item["id"]] = images[0]["url"]
     return image_dict
+
 # streamlit run app.py
