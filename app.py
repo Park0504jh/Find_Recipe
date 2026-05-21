@@ -1,4 +1,5 @@
 from image_loader import load_image_dict
+from clip_inference import classify_food
 import streamlit as st
 from PIL import Image
 import json
@@ -39,15 +40,9 @@ def search_recipe_real(user_input):
     if not os.path.exists(recipe_path):
         return []
 
-    # ------------------------
-    # 한국어 입력 처리
-    # ------------------------
-    user_is_korean = is_korean(
-        user_input
-    )
+    user_is_korean = is_korean(user_input)
 
     if user_is_korean:
-
         try:
             keyword = (
                 translator.translate(
@@ -56,85 +51,36 @@ def search_recipe_real(user_input):
                     dest="en"
                 ).text.lower()
             )
-
         except:
             keyword = user_input.lower()
-
     else:
         keyword = user_input.lower()
 
     final_results = []
 
-    with open(
-        recipe_path,
-        "r",
-        encoding="utf-8"
-    ) as f:
-
+    with open(recipe_path, "r", encoding="utf-8") as f:
         for line in f:
-
             line = line.strip()
-
-            # JSON 배열 괄호 제거
             if line in ["[", "]"]:
                 continue
-
-            # 마지막 쉼표 제거
             if line.endswith(","):
                 line = line[:-1]
-
             try:
-                recipe = json.loads(
-                    line
-                )
-
+                recipe = json.loads(line)
             except:
                 continue
 
-            title = recipe.get(
-                "title",
-                ""
-            ).lower()
-
+            title = recipe.get("title", "").lower()
             ingredients_text = ""
 
-            for ing in recipe.get(
-                "ingredients",
-                []
-            ):
+            for ing in recipe.get("ingredients", []):
+                if isinstance(ing, dict):
+                    ingredients_text += ing.get("text", "").lower() + " "
+                elif isinstance(ing, str):
+                    ingredients_text += ing.lower() + " "
 
-                if isinstance(
-                    ing,
-                    dict
-                ):
-
-                    ingredients_text += (
-                        ing.get(
-                            "text",
-                            ""
-                        ).lower()
-                        + " "
-                    )
-
-                elif isinstance(
-                    ing,
-                    str
-                ):
-
-                    ingredients_text += (
-                        ing.lower()
-                        + " "
-                    )
-
-            # 제목 + 재료 검색
-            if (
-                keyword in title
-                or keyword in ingredients_text
-            ):
-
-                final_results.append(
-                    recipe
-                )
+            if keyword in title or keyword in ingredients_text:
+                final_results.append(recipe)
 
             if len(final_results) >= 5:
                 break
@@ -201,30 +147,18 @@ with st.sidebar:
 
     st.info(
         "데이터셋: Recipe1M+\n\n"
-        "모델: YOLOv8"
+        "모델: CLIP (ViT-B-32)"
     )
 
     st.divider()
 
-    st.subheader(
-        "Developer Info"
-    )
+    st.subheader("Developer Info")
 
-    st.write(
-        "👤 **Name:** 이지원"
-    )
+    st.write("👤 **Name:** 이지원")
+    st.caption("Contact: wblee691919@duksung.ac.kr")
 
-    st.caption(
-        "Contact: wblee691919@duksung.ac.kr"
-    )
-
-    st.write(
-        "👤 **Name:** 박정현"
-    )
-
-    st.caption(
-        "Contact: park0504jh@duksung.ac.kr"
-    )
+    st.write("👤 **Name:** 박정현")
+    st.caption("Contact: park0504jh@duksung.ac.kr")
 
 # ------------------------
 # 제목
@@ -261,229 +195,119 @@ tab1, tab2 = st.tabs([
 # ------------------------
 with tab1:
 
-    st.markdown(
-        "## 어떤 요리를 원하시나요?"
-    )
+    st.markdown("## 어떤 요리를 원하시나요?")
 
     user_input = st.text_input(
         "",
-        placeholder=
-        "예: 파스타, 치킨, chicken"
+        placeholder="예: 파스타, 치킨, chicken"
     )
 
-    if st.button(
-        "🔍 레시피 검색하기",
-        use_container_width=True
-    ):
+    if st.button("🔍 레시피 검색하기", use_container_width=True):
 
         if user_input.strip():
 
-            with st.spinner(
-                "레시피 검색 중..."
-            ):
-
-                results = (
-                    search_recipe_real(
-                        user_input
-                    )
-                )
+            with st.spinner("레시피 검색 중..."):
+                results = search_recipe_real(user_input)
 
             if results:
 
                 image_dict = load_image_dict()
+                st.success(f"{len(results)}개의 레시피 발견!")
 
-                st.success(
-                    f"{len(results)}개의 "
-                    "레시피 발견!"
-                )
+                for idx, recipe in enumerate(results, start=1):
 
-                for idx, recipe in enumerate(
-                    results,
-                    start=1
-                ):
+                    title_text = recipe.get("title", "")
 
-                    title_text = recipe.get(
-                        "title",
-                        ""
-                    )
-
-                    # 한국어 검색이면 번역
-                    if is_korean(
-                        user_input
-                    ):
-
+                    if is_korean(user_input):
                         try:
-                            title_text = (
-                                translator.translate(
-                                    title_text,
-                                    src="en",
-                                    dest="ko"
-                                ).text
-                            )
+                            title_text = translator.translate(
+                                title_text, src="en", dest="ko"
+                            ).text
                         except:
                             pass
 
                     st.markdown(
                         f"""
                         <div class='recipe-card'>
-                        <h3>
-                        🍳 {idx}.
-                        {title_text}
-                        </h3>
+                        <h3>🍳 {idx}. {title_text}</h3>
                         </div>
                         """,
                         unsafe_allow_html=True
                     )
+
                     recipe_id = recipe.get("id")
                     if recipe_id and recipe_id in image_dict:
-                        st.image(image_dict[recipe_id], use_container_width=True)
-                    with st.expander(
-                        "상세 레시피 보기"
-                    ):
-
-                        # 재료
-                        st.write(
-                            "### 🥬 재료"
+                        st.image(
+                            image_dict[recipe_id],
+                            use_container_width=True
                         )
 
-                        for ing in recipe.get(
-                            "ingredients",
-                            []
-                        ):
+                    with st.expander("상세 레시피 보기"):
 
+                        st.write("### 🥬 재료")
+
+                        for ing in recipe.get("ingredients", []):
                             ingredient_text = ""
-
-                            if isinstance(
-                                ing,
-                                dict
-                            ):
-                                ingredient_text = (
-                                    ing.get(
-                                        "text",
-                                        ""
-                                    )
-                                )
-
-                            elif isinstance(
-                                ing,
-                                str
-                            ):
+                            if isinstance(ing, dict):
+                                ingredient_text = ing.get("text", "")
+                            elif isinstance(ing, str):
                                 ingredient_text = ing
 
-                            # 한국어 검색 시 번역
-                            if is_korean(
-                                user_input
-                            ):
+                            if is_korean(user_input):
                                 try:
-                                    ingredient_text = (
-                                        translator.translate(
-                                            ingredient_text,
-                                            src="en",
-                                            dest="ko"
-                                        ).text
-                                    )
+                                    ingredient_text = translator.translate(
+                                        ingredient_text, src="en", dest="ko"
+                                    ).text
                                 except:
                                     pass
 
-                            st.write(
-                                "- "
-                                + ingredient_text
-                            )
+                            st.write("- " + ingredient_text)
 
-                        # 조리법
-                        st.write(
-                            "### 👨‍🍳 조리법"
-                        )
+                        st.write("### 👨‍🍳 조리법")
 
-                        instructions = recipe.get(
-                            "instructions",
-                            []
-                        )
+                        instructions = recipe.get("instructions", [])
 
                         if instructions:
-
-                            for step_idx, step in enumerate(
-                                instructions,
-                                start=1
-                            ):
-
+                            for step_idx, step in enumerate(instructions, start=1):
                                 step_text = ""
-
-                                if isinstance(
-                                    step,
-                                    dict
-                                ):
-                                    step_text = (
-                                        step.get(
-                                            "text",
-                                            ""
-                                        )
-                                    )
-
-                                elif isinstance(
-                                    step,
-                                    str
-                                ):
+                                if isinstance(step, dict):
+                                    step_text = step.get("text", "")
+                                elif isinstance(step, str):
                                     step_text = step
 
-                                # 한국어 검색 시 번역
-                                if is_korean(
-                                    user_input
-                                ):
+                                if is_korean(user_input):
                                     try:
-                                        step_text = (
-                                            translator.translate(
-                                                step_text,
-                                                src="en",
-                                                dest="ko"
-                                            ).text
-                                        )
+                                        step_text = translator.translate(
+                                            step_text, src="en", dest="ko"
+                                        ).text
                                     except:
                                         pass
 
-                                st.write(
-                                    f"{step_idx}. "
-                                    + step_text
-                                )
-
+                                st.write(f"{step_idx}. " + step_text)
                         else:
-                            st.info(
-                                "조리법 정보가 없습니다."
-                            )
+                            st.info("조리법 정보가 없습니다.")
 
             else:
-                st.warning(
-                    "검색 결과가 없습니다."
-                )
+                st.warning("검색 결과가 없습니다.")
 
         else:
-            st.warning(
-                "음식을 입력해주세요."
-            )
+            st.warning("음식을 입력해주세요.")
 
 # ------------------------
 # 이미지 검색 탭
 # ------------------------
 with tab2:
 
-    st.markdown(
-        "## 음식 사진을 올려주세요"
-    )
+    st.markdown("## 음식 사진을 올려주세요")
 
     uploaded_file = st.file_uploader(
         "이미지 업로드",
-        type=[
-            "jpg",
-            "jpeg",
-            "png"
-        ]
+        type=["jpg", "jpeg", "png"]
     )
 
     if uploaded_file:
 
-        image = Image.open(
-            uploaded_file
-        )
+        image = Image.open(uploaded_file).convert("RGB")
 
         st.image(
             image,
@@ -491,9 +315,74 @@ with tab2:
             use_container_width=True
         )
 
-        st.success(
-            "이미지 업로드 완료!"
-        )
+        st.success("이미지 업로드 완료!")
+
+        if st.button("🔍 음식 분석 시작", use_container_width=True):
+
+            # CLIP으로 음식 분류
+            with st.spinner("이미지 분석 중..."):
+                food, confidence = classify_food(image)
+
+            st.info(f"감지된 음식: **{food}** ({confidence*100:.1f}%)")
+
+            # 레시피 검색
+            with st.spinner("레시피 검색 중..."):
+                results = search_recipe_real(food)
+
+            if results:
+
+                image_dict = load_image_dict()
+                st.success(f"{len(results)}개의 레시피 발견!")
+
+                for idx, recipe in enumerate(results, start=1):
+
+                    title_text = recipe.get("title", "")
+
+                    st.markdown(
+                        f"""
+                        <div class='recipe-card'>
+                        <h3>🍳 {idx}. {title_text}</h3>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+                    recipe_id = recipe.get("id")
+                    if recipe_id and recipe_id in image_dict:
+                        st.image(
+                            image_dict[recipe_id],
+                            use_container_width=True
+                        )
+
+                    with st.expander("상세 레시피 보기"):
+
+                        st.write("### 🥬 재료")
+
+                        for ing in recipe.get("ingredients", []):
+                            ingredient_text = ""
+                            if isinstance(ing, dict):
+                                ingredient_text = ing.get("text", "")
+                            elif isinstance(ing, str):
+                                ingredient_text = ing
+                            st.write("- " + ingredient_text)
+
+                        st.write("### 👨‍🍳 조리법")
+
+                        instructions = recipe.get("instructions", [])
+
+                        if instructions:
+                            for step_idx, step in enumerate(instructions, start=1):
+                                step_text = ""
+                                if isinstance(step, dict):
+                                    step_text = step.get("text", "")
+                                elif isinstance(step, str):
+                                    step_text = step
+                                st.write(f"{step_idx}. " + step_text)
+                        else:
+                            st.info("조리법 정보가 없습니다.")
+
+            else:
+                st.warning("검색 결과가 없습니다.")
 
 # ------------------------
 # Footer
@@ -502,8 +391,7 @@ st.divider()
 
 st.markdown(
     """
-    <div style='text-align:center;
-    color:gray;'>
+    <div style='text-align:center; color:gray;'>
     © 2026 Find Recipe AI Project
     </div>
     """,
