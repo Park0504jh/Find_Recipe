@@ -1,5 +1,5 @@
 from image_loader import load_image_dict
-from clip_inference import classify_food
+from train_clip import classify_food
 import streamlit as st
 from PIL import Image
 import json
