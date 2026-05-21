@@ -1,15 +1,19 @@
 from image_loader import load_image_dict
-from train_clip import classify_food
+from clip_inference import classify_food
 import streamlit as st
 from PIL import Image
 import json
 import os
-from googletrans import Translator
+import translators as ts
 
 # ------------------------
 # 번역기
 # ------------------------
-translator = Translator()
+def translate_text(text, src="ko", dest="en"):
+    try:
+        return ts.translate_text(text, from_language=src, to_language=dest)
+    except:
+        return text
 
 # ------------------------
 # 페이지 설정
@@ -45,11 +49,7 @@ def search_recipe_real(user_input):
     if user_is_korean:
         try:
             keyword = (
-                translator.translate(
-                    user_input,
-                    src="ko",
-                    dest="en"
-                ).text.lower()
+translate_text(user_input, src="ko", dest="en").lower()
             )
         except:
             keyword = user_input.lower()
@@ -220,9 +220,7 @@ with tab1:
 
                     if is_korean(user_input):
                         try:
-                            title_text = translator.translate(
-                                title_text, src="en", dest="ko"
-                            ).text
+                            title_text = translate_text(title_text, src="en", dest="ko")
                         except:
                             pass
 
@@ -255,9 +253,7 @@ with tab1:
 
                             if is_korean(user_input):
                                 try:
-                                    ingredient_text = translator.translate(
-                                        ingredient_text, src="en", dest="ko"
-                                    ).text
+                                    ingredient_text = translate_text(ingredient_text, src="en", dest="ko")
                                 except:
                                     pass
 
@@ -277,9 +273,7 @@ with tab1:
 
                                 if is_korean(user_input):
                                     try:
-                                        step_text = translator.translate(
-                                            step_text, src="en", dest="ko"
-                                        ).text
+                                        step_text = translate_text(step_text, src="en", dest="ko")
                                     except:
                                         pass
 
