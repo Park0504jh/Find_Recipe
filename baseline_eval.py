@@ -1,4 +1,3 @@
-import os
 import json
 import random
 import torch
@@ -7,37 +6,24 @@ import requests
 from PIL import Image
 from io import BytesIO
 from torch.utils.data import Dataset, DataLoader
-from torch import nn, optim
 from tqdm import tqdm
-
-# ------------------------
-# 설정
-# ------------------------
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 LAYER1_PATH = r"C:\Users\DS\Desktop\recipe1M_layers\layer1.json"
 LAYER2_PATH = r"C:\Users\DS\Desktop\recipe1M_layers\layer2.json"
 
-MODEL_NAME  = "ViT-B-32"
-PRETRAINED  = "openai"
-BATCH_SIZE  = 32
-EPOCHS      = 5
-LR          = 1e-5
+MODEL_NAME = "ViT-B-32"
+PRETRAINED = "openai"
+BATCH_SIZE = 32
 MAX_SAMPLES = 10000
-SAVE_PATH   = "clip_finetuned.pt"
-DEVICE      = "cuda" if torch.cuda.is_available() else "cpu"
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 TRAIN_RATIO = 0.8
 VALID_RATIO = 0.1
-TEST_RATIO  = 0.1
 SEED = 42
 
 print(f"사용 디바이스: {DEVICE}")
 
 
-# ------------------------
-# 데이터 준비
-# ------------------------
 def load_data(layer1_path, layer2_path, max_samples=MAX_SAMPLES):
     print("layer2.json 로딩 중...")
 
@@ -106,11 +92,7 @@ def split_data(pairs):
     return train_pairs, valid_pairs, test_pairs
 
 
-# ------------------------
-# Dataset
-# ------------------------
 class RecipeDataset(Dataset):
-
     def __init__(self, pairs, preprocess, tokenizer):
         self.pairs = pairs
         self.preprocess = preprocess
@@ -126,7 +108,6 @@ class RecipeDataset(Dataset):
             response = requests.get(pair["image_url"], timeout=5)
             image = Image.open(BytesIO(response.content)).convert("RGB")
             image = self.preprocess(image)
-
         except:
             image = torch.zeros(3, 224, 224)
 
@@ -135,51 +116,6 @@ class RecipeDataset(Dataset):
         return image, text
 
 
-# ------------------------
-# Loss 계산
-# ------------------------
-def compute_clip_loss(model, images, texts, loss_fn):
-    image_features = model.encode_image(images)
-    text_features = model.encode_text(texts)
-
-    image_features = image_features / image_features.norm(dim=-1, keepdim=True)
-    text_features = text_features / text_features.norm(dim=-1, keepdim=True)
-
-    logit_scale = model.logit_scale.exp()
-    logits_per_image = logit_scale * image_features @ text_features.T
-    logits_per_text = logits_per_image.T
-
-    labels = torch.arange(len(images), device=DEVICE)
-
-    loss = (
-        loss_fn(logits_per_image, labels) +
-        loss_fn(logits_per_text, labels)
-    ) / 2
-
-    return loss
-
-
-# ------------------------
-# Validation Loss
-# ------------------------
-def evaluate_loss(model, loader, loss_fn):
-    model.eval()
-    total_loss = 0
-
-    with torch.no_grad():
-        for images, texts in tqdm(loader, desc="Validation"):
-            images = images.to(DEVICE)
-            texts = texts.to(DEVICE)
-
-            loss = compute_clip_loss(model, images, texts, loss_fn)
-            total_loss += loss.item()
-
-    return total_loss / len(loader)
-
-
-# ------------------------
-# Retrieval R@1, R@5 평가
-# ------------------------
 def evaluate_retrieval(model, loader):
     model.eval()
 
@@ -187,7 +123,7 @@ def evaluate_retrieval(model, loader):
     all_text_features = []
 
     with torch.no_grad():
-        for images, texts in tqdm(loader, desc="Test Retrieval"):
+        for images, texts in tqdm(loader, desc="Baseline Test Retrieval"):
             images = images.to(DEVICE)
             texts = texts.to(DEVICE)
 
@@ -224,11 +160,8 @@ def evaluate_retrieval(model, loader):
     return r1, r5
 
 
-# ------------------------
-# 학습
-# ------------------------
-def train():
-    print("CLIP 모델 로딩 중...")
+def main():
+    print("Baseline OpenAI CLIP 모델 로딩 중...")
 
     model, _, preprocess = open_clip.create_model_and_transforms(
         MODEL_NAME,
@@ -239,25 +172,9 @@ def train():
     model = model.to(DEVICE)
 
     pairs = load_data(LAYER1_PATH, LAYER2_PATH)
-    train_pairs, valid_pairs, test_pairs = split_data(pairs)
+    _, _, test_pairs = split_data(pairs)
 
-    train_dataset = RecipeDataset(train_pairs, preprocess, tokenizer)
-    valid_dataset = RecipeDataset(valid_pairs, preprocess, tokenizer)
     test_dataset = RecipeDataset(test_pairs, preprocess, tokenizer)
-
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=BATCH_SIZE,
-        shuffle=True,
-        num_workers=0
-    )
-
-    valid_loader = DataLoader(
-        valid_dataset,
-        batch_size=BATCH_SIZE,
-        shuffle=False,
-        num_workers=0
-    )
 
     test_loader = DataLoader(
         test_dataset,
@@ -266,71 +183,27 @@ def train():
         num_workers=0
     )
 
-    optimizer = optim.AdamW(model.parameters(), lr=LR)
-    loss_fn = nn.CrossEntropyLoss()
-
-    best_valid_loss = float("inf")
-
-    print("학습 시작!")
-
-    for epoch in range(EPOCHS):
-        model.train()
-        total_train_loss = 0
-
-        for images, texts in tqdm(train_loader, desc=f"Epoch {epoch+1}/{EPOCHS}"):
-            images = images.to(DEVICE)
-            texts = texts.to(DEVICE)
-
-            loss = compute_clip_loss(model, images, texts, loss_fn)
-
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            total_train_loss += loss.item()
-
-        avg_train_loss = total_train_loss / len(train_loader)
-        avg_valid_loss = evaluate_loss(model, valid_loader, loss_fn)
-
-        print(f"Epoch {epoch+1} 완료")
-        print(f"Train Loss: {avg_train_loss:.4f}")
-        print(f"Valid Loss: {avg_valid_loss:.4f}")
-
-        torch.save(model.state_dict(), f"clip_epoch{epoch+1}.pt")
-
-        if avg_valid_loss < best_valid_loss:
-            best_valid_loss = avg_valid_loss
-            torch.save(model.state_dict(), SAVE_PATH)
-            print(f"Best model 저장: {SAVE_PATH}")
-
-    print("Test Set 평가 시작")
+    print("Baseline Test Set 평가 시작")
 
     r1, r5 = evaluate_retrieval(model, test_loader)
 
-    print(f"Image Retrieval R@1: {r1:.4f}")
-    print(f"Image Retrieval R@5: {r5:.4f}")
+    print(f"Baseline Image Retrieval R@1: {r1:.4f}")
+    print(f"Baseline Image Retrieval R@5: {r5:.4f}")
 
     metrics = {
         "model": MODEL_NAME,
         "pretrained": PRETRAINED,
         "max_samples": MAX_SAMPLES,
-        "train_size": len(train_pairs),
-        "valid_size": len(valid_pairs),
         "test_size": len(test_pairs),
-        "batch_size": BATCH_SIZE,
-        "epochs": EPOCHS,
-        "learning_rate": LR,
-        "best_valid_loss": best_valid_loss,
-        "image_retrieval_r1": r1,
-        "image_retrieval_r5": r5
+        "baseline_image_retrieval_r1": r1,
+        "baseline_image_retrieval_r5": r5
     }
 
-    with open("metrics_result.json", "w", encoding="utf-8") as f:
+    with open("baseline_metrics_result.json", "w", encoding="utf-8") as f:
         json.dump(metrics, f, indent=4, ensure_ascii=False)
 
-    print("metrics_result.json 저장 완료")
-    print("학습 완료!")
+    print("baseline_metrics_result.json 저장 완료")
 
 
 if __name__ == "__main__":
-    train()
+    main()
