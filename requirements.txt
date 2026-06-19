@@ -1,0 +1,7 @@
+streamlit
+torch
+open_clip_torch
+Pillow
+requests
+deep-translator
+tqdm
