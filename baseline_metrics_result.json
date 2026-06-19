@@ -1,8 +1,0 @@
-{
-    "model": "ViT-B-32",
-    "pretrained": "openai",
-    "max_samples": 10000,
-    "test_size": 1000,
-    "baseline_image_retrieval_r1": 0.173,
-    "baseline_image_retrieval_r5": 0.343
-}
