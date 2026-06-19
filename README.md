@@ -88,6 +88,12 @@ cd Find_Recipe
 streamlit run app.py
 ```
 
+### 구글드라이브 링크
+
+```bash
+https://drive.google.com/drive/folders/1ZYhbH_-NS-33WbqDuXyjIsFN-JfkURKL?usp=drive_link
+```
+
 ---
 
 ## 🔄 데이터 파이프라인
