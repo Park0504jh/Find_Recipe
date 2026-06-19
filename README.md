@@ -90,7 +90,7 @@ streamlit run app.py
 
 구글드라이브:
 https://drive.google.com/drive/folders/1ZYhbH_-NS-33WbqDuXyjIsFN-JfkURKL?usp=drive_link
-전체 Recipe1M+ 데이터셋은 용량 문제로 GitHub에 포함하지 않았습니다.
+- 전체 Recipe1M+ 데이터셋은 용량 문제로 GitHub에 포함하지 않았습니다.
 
 ---
 
