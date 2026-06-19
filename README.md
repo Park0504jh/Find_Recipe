@@ -137,7 +137,7 @@ clip_finetuned.pt 저장
 | `image_loader.py` | layer2.json 기반 레시피 이미지 URL 로더 |
 | `train_clip.py` | CLIP 파인튜닝 학습 스크립트 |
 | `clip_inference.py` | 학습된 CLIP 모델로 음식 이미지 분류 (추론) |
-| `clip_finetuned.pt` | 학습 완료된 CLIP 모델 가중치 |
+| `clip_finetuned.pt` | 학습 완료된 CLIP 모델 |
 
 ---
 
